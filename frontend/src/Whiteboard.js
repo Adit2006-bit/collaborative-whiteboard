@@ -6,7 +6,7 @@ import socket from "./socket";
 
 const API_URL = "https://collaborative-whiteboard-backend-3aio.onrender.com";
 
-export default function Whiteboard({ boardId, permission }) {
+export default function Whiteboard({ boardId, permission, onBack }) {
   const canvasRef = useRef(null);
   const fabricCanvasRef = useRef(null);
   const isRemoteUpdate = useRef(false);
@@ -24,10 +24,7 @@ export default function Whiteboard({ boardId, permission }) {
     fabricCanvasRef.current = canvas;
 
     if (permission === "edit") {
-      canvas.isDrawingMode = true;
-      canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
-      canvas.freeDrawingBrush.width = 3;
-      canvas.freeDrawingBrush.color = "#000000";
+      enableDrawingBrush(canvas, "#000000", 3);
     } else {
       canvas.isDrawingMode = false;
       canvas.selection = false;
@@ -39,15 +36,11 @@ export default function Whiteboard({ boardId, permission }) {
       try {
         const res = await axios.get(`${API_URL}/api/boards/${boardId}`);
 
-        if (
-          res.data.canvasData &&
-          Object.keys(res.data.canvasData).length > 0
-        ) {
+        if (res.data.canvasData && Object.keys(res.data.canvasData).length > 0) {
           isRemoteUpdate.current = true;
 
           canvas.loadFromJSON(res.data.canvasData, () => {
             canvas.requestRenderAll();
-
             setTimeout(() => {
               isRemoteUpdate.current = false;
             }, 200);
@@ -65,11 +58,9 @@ export default function Whiteboard({ boardId, permission }) {
       clearTimeout(updateTimeout.current);
 
       updateTimeout.current = setTimeout(() => {
-        const canvasData = canvas.toJSON();
-
         socket.emit("canvas-update", {
           boardId,
-          canvasData,
+          canvasData: canvas.toJSON(),
         });
       }, 150);
     };
@@ -81,7 +72,6 @@ export default function Whiteboard({ boardId, permission }) {
 
       canvas.loadFromJSON(canvasData, () => {
         canvas.requestRenderAll();
-
         setTimeout(() => {
           isRemoteUpdate.current = false;
         }, 250);
@@ -91,6 +81,7 @@ export default function Whiteboard({ boardId, permission }) {
     canvas.on("path:created", sendUpdate);
     canvas.on("object:modified", sendUpdate);
     canvas.on("object:removed", sendUpdate);
+    canvas.on("text:changed", sendUpdate);
 
     socket.on("receive-update", handleReceiveUpdate);
 
@@ -98,12 +89,9 @@ export default function Whiteboard({ boardId, permission }) {
 
     const autoSave = setInterval(async () => {
       try {
-        const canvasData = canvas.toJSON();
-
         await axios.post(`${API_URL}/api/boards/${boardId}/save`, {
-          canvasData,
+          canvasData: canvas.toJSON(),
         });
-
         console.log("Board auto-saved");
       } catch (error) {
         console.log("Auto-save error:", error);
@@ -119,6 +107,7 @@ export default function Whiteboard({ boardId, permission }) {
       canvas.off("path:created", sendUpdate);
       canvas.off("object:modified", sendUpdate);
       canvas.off("object:removed", sendUpdate);
+      canvas.off("text:changed", sendUpdate);
 
       try {
         canvas.dispose();
@@ -129,6 +118,13 @@ export default function Whiteboard({ boardId, permission }) {
       fabricCanvasRef.current = null;
     };
   }, [boardId, permission]);
+
+  const enableDrawingBrush = (canvas, color, width) => {
+    canvas.isDrawingMode = true;
+    canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
+    canvas.freeDrawingBrush.color = color;
+    canvas.freeDrawingBrush.width = width;
+  };
 
   const sendManualUpdate = () => {
     const canvas = fabricCanvasRef.current;
@@ -144,10 +140,15 @@ export default function Whiteboard({ boardId, permission }) {
     const canvas = fabricCanvasRef.current;
     if (!canvas || permission !== "edit") return;
 
-    canvas.isDrawingMode = true;
-    canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
-    canvas.freeDrawingBrush.width = 3;
-    canvas.freeDrawingBrush.color = "#000000";
+    enableDrawingBrush(canvas, "#000000", 3);
+  };
+
+  const enableEraser = () => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas || permission !== "edit") return;
+
+    // White brush works like eraser on white background
+    enableDrawingBrush(canvas, "#ffffff", 18);
   };
 
   const addRectangle = () => {
@@ -204,10 +205,12 @@ export default function Whiteboard({ boardId, permission }) {
       top: 200,
       fontSize: 24,
       fill: "black",
+      editable: true,
     });
 
     canvas.add(text);
     canvas.setActiveObject(text);
+    text.enterEditing();
     canvas.requestRenderAll();
     sendManualUpdate();
   };
@@ -218,30 +221,20 @@ export default function Whiteboard({ boardId, permission }) {
 
     canvas.isDrawingMode = false;
 
-    const note = new fabric.Rect({
-      width: 200,
-      height: 130,
-      fill: "#fff59d",
-      stroke: "#d6c85a",
-      strokeWidth: 1,
-      rx: 10,
-      ry: 10,
-    });
-
-    const text = new fabric.IText("Sticky Note", {
-      left: 20,
-      top: 40,
-      fontSize: 18,
-      fill: "black",
-    });
-
-    const group = new fabric.Group([note, text], {
+    const note = new fabric.Textbox("Write your note here...", {
       left: 250,
       top: 250,
+      width: 220,
+      fontSize: 18,
+      fill: "#000000",
+      backgroundColor: "#fff59d",
+      padding: 15,
+      editable: true,
     });
 
-    canvas.add(group);
-    canvas.setActiveObject(group);
+    canvas.add(note);
+    canvas.setActiveObject(note);
+    note.enterEditing();
     canvas.requestRenderAll();
     sendManualUpdate();
   };
@@ -299,10 +292,16 @@ export default function Whiteboard({ boardId, permission }) {
   return (
     <div>
       <div className="toolbar">
+        <button onClick={onBack}>Home</button>
+
         <h3>Board ID: {boardId}</h3>
 
         <button onClick={enablePen} disabled={permission === "view"}>
           Pen
+        </button>
+
+        <button onClick={enableEraser} disabled={permission === "view"}>
+          Eraser
         </button>
 
         <button onClick={addRectangle} disabled={permission === "view"}>

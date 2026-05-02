@@ -24,11 +24,22 @@ function App() {
   const joinBoard = () => {
     if (boardId.trim() !== "") {
       setJoinedBoard(true);
+    } else {
+      alert("Please enter a Board ID");
     }
   };
 
   if (joinedBoard) {
-    return <Whiteboard boardId={boardId} permission={permission} />;
+    return (
+      <Whiteboard
+        boardId={boardId}
+        permission={permission}
+        onBack={() => {
+          setJoinedBoard(false);
+          setBoardId("");
+        }}
+      />
+    );
   }
 
   return (
@@ -45,7 +56,10 @@ function App() {
           onChange={(e) => setBoardId(e.target.value)}
         />
 
-        <select value={permission} onChange={(e) => setPermission(e.target.value)}>
+        <select
+          value={permission}
+          onChange={(e) => setPermission(e.target.value)}
+        >
           <option value="edit">Edit Permission</option>
           <option value="view">View Only</option>
         </select>
