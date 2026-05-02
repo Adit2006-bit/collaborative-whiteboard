@@ -10,11 +10,15 @@ const boardRoutes = require("./routes/boardRoutes");
 const app = express();
 const server = http.createServer(app);
 
-app.use(cors({
-  origin: "http://localhost:3000",
-  methods: ["GET", "POST"],
-  credentials: true
-}));
+const io = new Server(server, {
+  cors: {
+    origin: [
+      "http://localhost:3000",
+      "https://collaborative-whiteboard-two-zeta.vercel.app" 
+    ],
+    methods: ["GET", "POST"],
+  },
+});
 
 app.use(express.json({ limit: "50mb" }));
 
@@ -31,7 +35,10 @@ mongoose
 
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: [
+      "http://localhost:3000",
+      "https://collaborative-whiteboard-two-zeta.vercel.app" // 🔥 same link here
+    ],
     methods: ["GET", "POST"],
   },
 });
