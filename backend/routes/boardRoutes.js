@@ -5,16 +5,30 @@ const router = express.Router();
 
 router.post("/create", async (req, res) => {
   try {
-    const boardId = Math.random().toString(36).substring(2, 10);
+    const boardId = Date.now().toString();
 
-    const board = await Board.create({
+    const board = new Board({
       boardId,
       canvasData: {},
+      permission: "edit",
+      revisionHistory: [],
     });
 
-    res.json(board);
+    await board.save();
+
+    res.status(201).json({
+      boardId: board.boardId,
+      canvasData: board.canvasData,
+      permission: board.permission,
+    });
   } catch (error) {
-    res.status(500).json({ message: "Error creating board", error });
+    console.error("Create board error:", error);
+
+    res.status(500).json({
+      message: "Error creating board",
+      error: error.message,
+      details: error,
+    });
   }
 });
 

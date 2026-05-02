@@ -13,7 +13,6 @@ const boardSchema = new mongoose.Schema(
     },
     permission: {
       type: String,
-      enum: ["edit", "view"],
       default: "edit",
     },
     revisionHistory: [
